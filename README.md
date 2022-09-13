@@ -9,3 +9,9 @@ The game renders vector sprites onto a 2D canvas. The sprite engine allows to co
 ### Bunding
 
 Bundling and processing simply consists of concatenating all the .js files in `/src` (hence the naming of those), running the result through Closure Compiler, and then inserting the resulting code into the template file at the root of the project along with the CSS. The fina artifact is a single `index.html` that has everything built in. 
+
+# Conclusion
+
+The structure of the project and the sprite workflow is alright, but the gameplay itself is very basic. I restarted multiple times during the sub time, and time ran out before I could really flesh things out. The intention was to have more (literal) levels, powerups, music and some sort of score system. It had been doable was there only a few more days before deadline.
+
+All in all, really fun project and a nice challenge! I'll be back next year.
