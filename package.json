@@ -1,0 +1,30 @@
+{
+  "name": "js13k19",
+  "version": "1.0.0",
+  "description": "JS13K entry",
+  "main": "index.js",
+  "scripts": {
+    "serve": "serve -p 1234 dist",
+    "editor": "serve -p 4321 dev",
+    "watch": "watch \"node build.js\" src",
+    "dev": "concurrently \"npm:serve\" \"npm:watch\"",
+    "build": "node build.js prod"
+  },
+  "keywords": [
+    "game",
+    "js",
+    "js13k"
+  ],
+  "author": "Charlie Norin",
+  "license": "ISC",
+  "dependencies": {
+    "clean-css-cli": "^4.3.0",
+    "concurrently": "^4.1.2",
+    "filesize": "^4.1.2",
+    "google-closure-compiler": "^20190729.0.0",
+    "html-minifier": "^4.0.0",
+    "jszip": "^3.2.2",
+    "serve": "^11.1.0",
+    "watch": "^1.0.2"
+  }
+}

@@ -1,0 +1,448 @@
+<html>
+  <head>
+    <style>
+      #svg {
+        width: 700px;
+        height: 700px;
+      }
+
+      .poly.selected {
+        stroke: aqua;
+        stroke-width: 1px;
+      }
+
+      .coord {
+        fill: blue;
+        opacity: 0.2;
+        stroke: transparent;
+        stroke-width: 4px;
+        paint-order: stroke fill;
+      }
+
+      .coord.center {
+        stroke: purple;
+        stroke-width: 3px;
+        paint-order: stroke fill;
+      }
+
+      .coord.active {
+        stroke: aqua;
+      }
+
+      .coord.over {
+        stroke: blue;
+      }
+
+      .add .coord.over {
+        opacity: 0.8;
+        stroke: lime;
+      }
+
+      .move .coord.selected,
+      .move .coord.selected,
+      .add .coord.selected {
+        opacity: 0.8;
+        stroke: green;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+      }
+
+      #modes,
+      #actions {
+        width: 400px;
+        display: flex;
+        margin-top: 10px;
+        justify-content: center;
+      }
+
+      #actions div,
+      #modes div {
+        cursor: pointer;
+        padding: 5px;
+        width: 60px;
+        text-align: center;
+        color: white;
+        font-family: sans-serif;
+        font-size: 10;
+        background-color: #666;
+        border: 1px solid #444;
+        border-radius: 4px;
+        font-weight: 400;
+        opacity: 0.6;
+        margin: 2px;
+      }
+
+      #modes div.active {
+        opacity: 1;
+      }
+
+      #colors {
+        padding-top: 10px;
+        width: 260px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      #colors div {
+        width: 12px;
+        height: 20px;
+        border: 1px solid #888;
+        margin: 1px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="modes">
+      <div id="mode-new">◸ NEW</div>
+      <div id="mode-add">• ADD</div>
+      <div id="mode-remove">• REMOVE</div>
+      <div id="mode-move">• MOVE</div>
+    </div>
+    <svg viewBox="-130, -130, 260, 260" id="svg">
+      <g id="polys"></g>
+      <g id="coords"></g>
+    </svg>
+    <div id="colors"></div>
+    <div id="actions">
+      <div id="action-import">◸ IMPORT</div>
+      <div id="action-export">◸ EXPORT</div>
+      <div id="action-moveup">◸ UP</div>
+      <div id="action-movedown">◸ DOWN</div>
+    </div>
+    <script>
+      (() => {
+        const svgNs = 'http://www.w3.org/2000/svg';
+        const svgRoot = document.querySelector('#svg');
+        const polyRoot = document.querySelector('#polys');
+        const coordRoot = document.querySelector('#coords');
+        const ADD = 'add', REMOVE = 'remove', NEW = 'new', MOVE = 'move';
+        const coords = [];
+        const polys = [];
+
+        let mode = NEW;
+        let selectedPoly;
+        let selectedCoord;
+
+        const encodePolys = () => polys
+          .filter(x => x.points.length > 4)
+          .reduce((res, curr) => [...res, curr.color, ...curr.points], []);
+
+        const decodePolys = (encoded) => {
+          polys.length = 0;
+
+          let poly;
+          encoded.forEach((item) => {
+            if (typeof item === 'string') {
+              poly = createPoly();
+              poly.color = item;
+            } else {
+              poly.points.push(item);
+            }
+          });
+
+          polys.forEach(applyPoly);
+        };
+
+        const colorSetter = color => () => {
+          if (selectedPoly) {
+            selectedPoly.color = color;
+            applyPoly(selectedPoly);
+          }
+        };
+
+        const createColors = () => {
+          const r = 256, g = 16, b = 1;
+          const colors = [];
+          for (var i = 0; i < 16; i += 4) {
+            for (var j = 0; j < 16; j += 4) {
+              for (var k = 0; k < 16; k += 4) {
+                colors.push(((r * i) + (g * j) + (b * k)).toString(16).padStart(3, '0'));
+              }
+            }
+          }
+
+          const colorRoot = document.querySelector('#colors');
+          for (let color of colors) {
+            const el = document.createElement('div');
+            el.classList.add('color');
+            el.classList.add(`c-${color}`);
+            el.style.backgroundColor = `#${color}`;
+            el.addEventListener('click', colorSetter(`#${color}`));
+            colorRoot.appendChild(el);
+          }
+        }
+
+        const sameCoord = (coord1, coord2) => coord1[0] === coord2[0] && coord1[1] === coord2[1];
+
+        const setMode = newMode => {
+          coordRoot.classList.remove(ADD);
+          coordRoot.classList.remove(REMOVE);
+          coordRoot.classList.remove(MOVE);
+          coordRoot.classList.remove(NEW);
+
+          for (let mode of [ADD, REMOVE, NEW, MOVE]) {
+            if (mode === newMode) {
+              document.querySelector(`#mode-${mode}`).classList.add('active');
+            } else {
+              document.querySelector(`#mode-${mode}`).classList.remove('active');
+            }
+          }
+
+          if (newMode === NEW) selectPoly();
+          coordRoot.classList.add(newMode);
+          mode = newMode;
+        };
+
+        const applyPoly = poly => {
+          const pointString = poly.points.reduce((res, curr, idx) =>
+            (res + (curr * 10) + ((idx % 2 ? ', ' : ' '))), '')
+              .slice(0, -2);
+
+          poly.el.setAttribute('points', pointString);
+          poly.el.setAttribute('fill', poly.color);
+          updateCoords();
+        };
+
+        const movePolyZ = (direction) => () => {
+          if (!selectedPoly) return;
+
+          if (direction === -1) {
+            var sibling = selectedPoly.el.previousElementSibling;
+            if (!sibling) return;
+
+            polyRoot.removeChild(selectedPoly.el);
+            polyRoot.insertBefore(selectedPoly.el, sibling);
+          } else {
+            var sibling = selectedPoly.el.nextElementSibling;
+            var nextSibling = sibling ? sibling.nextElementSibling : null;
+
+            polyRoot.removeChild(selectedPoly.el);
+            if (nextSibling) {
+              polyRoot.insertBefore(selectedPoly.el, nextSibling);
+            } else {
+              polyRoot.appendChild(selectedPoly.el);
+            }
+          }
+
+          let idx = polys.indexOf(selectedPoly);
+          polys.splice(idx, 1);
+          polys.splice(idx + direction, 0, selectedPoly);
+        };
+
+        const createCoords = () => {
+          for (var y = -12; y < 13; y++) {
+            for (var x = -12; x < 13; x++) {
+              const el = document.createElementNS(svgNs, 'circle');
+              el.coord = [x, y];
+              coords.push(el);
+
+              el.classList.add('coord');
+              el.setAttribute('r', 0.5);
+              el.setAttribute('cx', x * 10);
+              el.setAttribute('cy', y * 10);
+
+              if (x === 0 && y === 0) {
+               el.classList.add('center');
+              }
+
+              const fx = x, fy = y;
+              el.addEventListener('click', coordClickCallback([fx, fy]));
+              el.addEventListener('mouseover', coordHoverCallback([fx, fy], el, true));
+              el.addEventListener('mouseout', coordHoverCallback([fx, fy], el, false));
+
+              coordRoot.appendChild(el);
+            }
+          }
+        };
+
+        const updateCoords = () => {
+          coords.forEach(el => {
+            el.classList.remove('active')
+            el.classList.remove('selected')
+          });
+
+          coords.forEach(el => {
+            if (selectedPoly) {
+              if (selectedCoord && sameCoord(selectedCoord, el.coord)) {
+                el.classList.add('selected');
+              } else if (pointIndex(selectedPoly, el.coord) !== undefined) {
+                el.classList.add('active');
+              }
+            }
+          });
+        }
+
+        const pointIndex = (poly, coord) => {
+          for (let i = 0; i < poly.points.length; i += 2) {
+            if (poly.points[i] === coord[0] && poly.points[i + 1] === coord[1]) {
+              return i;
+            }
+          }
+        };
+
+        const containsPoint = (poly, coord) =>
+          pointIndex(poly, coord) !== undefined;
+
+        const removePoint = (poly, coord) => {
+          const targetIdx = pointIndex(poly, coord);
+          poly.points.splice(targetIdx, 2);
+          applyPoly(poly);
+        };
+
+        const movePoint = (poly, fromCoord, toCoord) => {
+          const targetIdx = pointIndex(poly, fromCoord);
+          poly.points.splice(targetIdx, 2, ...toCoord);
+          applyPoly(poly);
+        };
+
+        const addPoint = (poly, coord) => {
+          let idx = (selectedCoord) ? pointIndex(poly, selectedCoord) + 2 : 999;
+          poly.points.splice(idx, 0, ...coord);
+          applyPoly(poly);
+        };
+
+        const coordClickCallback = (coord) => ev => {
+          console.log('Clicked coord', coord);
+
+          if (mode === NEW) {
+            const poly = createPoly();
+            selectPoly(poly);
+            addPoint(poly, coord);
+            selectCoord(coord);
+            setMode(ADD);
+
+          } else if (mode === ADD) {
+            if (!selectedPoly) return;
+
+            if (containsPoint(selectedPoly, coord)) {
+              selectCoord(coord);
+              updateCoords();
+            } else {
+              addPoint(selectedPoly, coord);
+              selectCoord(coord);
+            }
+          } else if (mode === REMOVE) {
+            if (!selectedPoly) return;
+
+            if (containsPoint(selectedPoly, coord)) {
+              removePoint(selectedPoly, coord);
+              selectCoord();
+            }
+          } else if (mode === MOVE) {
+            if (!selectedPoly) return;
+
+            if (containsPoint(selectedPoly, coord)) {
+              selectCoord(coord);
+            } else if (selectedCoord) {
+              movePoint(selectedPoly, selectedCoord, coord);
+              selectCoord(coord);
+            }
+          }
+
+          ev.stopPropagation();
+          ev.preventDefault();
+        };
+
+        const coordHoverCallback = (coord, el, over) => ev => {
+          if (over) {
+            el.classList.add('over');
+          } else {
+            el.classList.remove('over');
+          }
+        }
+
+        const selectPoly = poly => {
+          if (poly === selectedPoly) return;
+
+          polys.forEach(poly => poly.el.classList.remove('selected'));
+
+          if (poly) {
+            poly.el.classList.add('selected');
+          }
+
+          selectedPoly = poly;
+          selectCoord();
+          updateCoords();
+        };
+
+        const selectCoord = coord => {
+          selectedCoord = coord;
+          updateCoords();
+        };
+
+        const createPoly = () => {
+          const el = document.createElementNS(svgNs, 'polygon');
+          el.classList.add('poly');
+          polyRoot.appendChild(el);
+
+          const poly = {
+            points: [],
+            color: '#333',
+            el: el,
+          };
+
+          el.addEventListener('click', ev => {
+            console.log('Clicked poly');
+            selectPoly(poly);
+
+            ev.preventDefault();
+            ev.stopPropagation();
+          });
+
+          polys.push(poly);
+          updateCoords();
+          return poly;
+        };
+
+        const main = () => {
+          createCoords();
+          createColors();
+
+          for (let mode of [ADD, REMOVE, MOVE, NEW]) {
+            let m = mode;
+            document.querySelector(`#mode-${m}`).addEventListener('click', () => setMode(m));
+          }
+
+          svgRoot.addEventListener('click', () => {
+            console.log('Clicked svg');
+            selectPoly();
+          });
+
+          setMode(NEW);
+
+          document.querySelector('#action-import').addEventListener('click', async () => {
+            if (polys.length > 0 && !window.confirm('Import and overwrite?')) return;
+
+            var str = await navigator.clipboard.readText();
+            var encoded = JSON.parse(str);
+            decodePolys(encoded);
+          });
+
+          document.querySelector('#action-export').addEventListener('click', async () => {
+            var raw = encodePolys();
+            await navigator.clipboard.writeText(
+              JSON.stringify(raw)
+                .replaceAll(',"', ',\n\t"')
+                .replaceAll('[', '[\n\t')
+                .replaceAll(']', '\n]')
+            );
+
+            window.alert('Copied to clipboard!');
+          });
+
+          document.querySelector('#action-moveup').addEventListener('click', movePolyZ(1));
+
+          document.querySelector('#action-movedown').addEventListener('click', movePolyZ(-1));
+        }
+
+        main();
+      })()
+    </script>
+  </body>
+</html>

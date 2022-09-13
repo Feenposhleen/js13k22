@@ -1,0 +1,1 @@
+<head><meta name="viewport" content="width=device-width, user-scalable=no" /><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" /><style>{{css}}</style></head><canvas id="c" width="200" height="400"></canvas><script>(() => {{{js}}})()</script>

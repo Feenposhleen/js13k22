@@ -1,0 +1,11 @@
+body {
+  margin: 0;
+  background-color: #111;
+}
+
+#c {
+  image-rendering: pixelated;
+  display: block;
+  margin: 0 auto;
+  height: 100%;
+}
